@@ -255,11 +255,12 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 ## Citation
 
 ```bibtex
-@software{fabriclite2024,
+@software{fabriclite2025,
   title={FabricLite: A Tiny Fabric Classifier for Garments},
-  author={FabricLite Team},
-  year={2024},
-  url={https://github.com/Deep-De-coder/fabric_lite}
+  author={Deep-De-coder},
+  year={2025},
+  url={https://github.com/Deep-De-coder/fabric_lite},
+  note={A production-ready Python package for fabric classification with MobileNetV3-Small backbone, calibrated outputs, and mobile-friendly exports}
 }
 ```
 
