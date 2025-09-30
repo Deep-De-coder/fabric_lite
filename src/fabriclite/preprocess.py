@@ -70,10 +70,38 @@ def preprocess(
     Returns:
         Preprocessed tensor ready for model input
     """
-    # Handle tensor input directly
+    # Handle tensor input - apply transforms if needed
     if isinstance(img, torch.Tensor):
         if img.dim() == 3:
             img = img.unsqueeze(0)  # Add batch dimension
+        
+        # If tensor is not the right size, apply transforms
+        if img.shape[-2:] != (size, size):
+            # Convert tensor to PIL for processing
+            # Denormalize if needed (assuming ImageNet normalization)
+            if img.min() < 0:  # Likely normalized
+                img_denorm = img * torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1) + torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+                img_denorm = torch.clamp(img_denorm, 0, 1)
+            else:
+                img_denorm = img
+            
+            # Convert to PIL
+            img_pil = transforms.ToPILImage()(img_denorm.squeeze(0))
+            
+            # Apply transforms
+            transform = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(size),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]
+                )
+            ])
+            
+            tensor = transform(img_pil)
+            return tensor.unsqueeze(0)
+        
         return img
     
     # Load image
