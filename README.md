@@ -213,8 +213,8 @@ Pretrained weights are automatically downloaded from Hugging Face Hub. You can a
 
 ```bash
 # Clone repository
-git clone https://github.com/fabriclite/fabriclite.git
-cd fabriclite
+git clone https://github.com/Deep-De-coder/fabric_lite.git
+cd fabric_lite
 
 # Install in development mode
 pip install -e ".[dev]"
@@ -241,6 +241,7 @@ make test       # Run tests
 make fmt        # Format code
 make lint       # Lint code
 make serve      # Start FastAPI server
+make clean      # Clean build artifacts
 ```
 
 ## License
@@ -249,7 +250,7 @@ Apache-2.0 License. See [LICENSE](LICENSE) for details.
 
 ## Contributing
 
-Contributions are welcome! Please see our contributing guidelines and code of conduct.
+Contributions are welcome! Please feel free to submit issues and pull requests.
 
 ## Citation
 
@@ -258,7 +259,7 @@ Contributions are welcome! Please see our contributing guidelines and code of co
   title={FabricLite: A Tiny Fabric Classifier for Garments},
   author={FabricLite Team},
   year={2024},
-  url={https://github.com/fabriclite/fabriclite}
+  url={https://github.com/Deep-De-coder/fabric_lite}
 }
 ```
 
