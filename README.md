@@ -248,6 +248,10 @@ make clean      # Clean build artifacts
 
 Apache-2.0 License. See [LICENSE](LICENSE) for details.
 
+**Usage Terms:**
+- ✅ **Research & Academic Use**: Open and free for research, academic, and educational purposes
+- 📧 **Commercial Use**: Please contact the author (Deep-De-coder) for commercial licensing terms
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues and pull requests.
