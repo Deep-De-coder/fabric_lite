@@ -1,5 +1,6 @@
 """Command-line interface for FabricLite."""
 
+import csv
 import json
 import sys
 from pathlib import Path
@@ -12,8 +13,16 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from .classifier import FabricClassifier
+from .constants import CSV_HEADER
 from .data import FolderDataset, make_dataloaders
 from .export import to_onnx, to_torchscript
+from .formatting import (
+    build_record,
+    get_output_format,
+    write_csv_row,
+    write_json_array,
+    write_jsonl,
+)
 from .metrics import compute_metrics, confusion_matrix_plot, plot_training_history
 from .preprocess import preprocess
 from .taxonomy import FABRIC_LABELS
@@ -30,10 +39,17 @@ def infer(
     topk: int = typer.Option(3, "--topk", "-k", help="Number of top predictions"),
     white_balance: bool = typer.Option(False, "--wb", help="Apply white balance correction"),
     weights: Optional[Path] = typer.Option(None, "--weights", "-w", help="Path to model weights"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file")
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+    csv_out: bool = typer.Option(False, "--csv", help="Output as CSV"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (only with --json)")
 ):
     """Infer fabric type from a single image."""
     try:
+        # Validate mutual exclusivity
+        if json_out and csv_out:
+            raise typer.BadParameter("Use either --json or --csv, not both.")
+        
         if not image.exists():
             console.print(f"[red]Error: Image file {image} does not exist[/red]")
             raise typer.Exit(1)
@@ -42,7 +58,8 @@ def infer(
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
-            console=console
+            console=console,
+            disable=json_out or csv_out  # Disable progress for structured output
         ) as progress:
             task = progress.add_task("Loading model...", total=None)
             
@@ -54,22 +71,50 @@ def infer(
                 model = FabricClassifier.from_pretrained()
             
             progress.update(task, description="Running inference...")
-            result = model.predict(image, topk=topk, white_balance=white_balance)
+            
+            # Get probabilities for structured output
+            if json_out or csv_out:
+                prob_dict = model.predict_proba(image, white_balance=white_balance)
+                record = build_record(str(image), prob_dict, k=topk)
+            else:
+                # Use existing predict method for human-readable output
+                result = model.predict(image, topk=topk, white_balance=white_balance)
         
-        # Display results
-        table = Table(title="Fabric Classification Results")
-        table.add_column("Fabric Type", style="cyan")
-        table.add_column("Probability", style="magenta")
+        # Handle structured output
+        if json_out:
+            if output:
+                with open(output, 'w') as f:
+                    json.dump(record, f, indent=2 if pretty else None, separators=(',', ':') if not pretty else None)
+            else:
+                json.dump(record, sys.stdout, indent=2 if pretty else None, separators=(',', ':') if not pretty else None)
+                sys.stdout.write('\n')
         
-        for label, prob in result.items():
-            table.add_row(label, f"{prob:.3f}")
+        elif csv_out:
+            if output:
+                with open(output, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(CSV_HEADER)
+                    write_csv_row(writer, record)
+            else:
+                writer = csv.writer(sys.stdout)
+                writer.writerow(CSV_HEADER)
+                write_csv_row(writer, record)
         
-        console.print(table)
-        
-        # Save to file if requested
-        if output:
-            save_json(result, output)
-            console.print(f"[green]Results saved to {output}[/green]")
+        else:
+            # Default human-readable output
+            table = Table(title="Fabric Classification Results")
+            table.add_column("Fabric Type", style="cyan")
+            table.add_column("Probability", style="magenta")
+            
+            for label, prob in result.items():
+                table.add_row(label, f"{prob:.3f}")
+            
+            console.print(table)
+            
+            # Save to file if requested (legacy behavior)
+            if output:
+                save_json(result, output)
+                console.print(f"[green]Results saved to {output}[/green]")
         
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
@@ -79,22 +124,27 @@ def infer(
 @app.command()
 def batch(
     folder: Path = typer.Argument(..., help="Path to folder containing images"),
-    output: Path = typer.Option(Path("predictions.csv"), "--output", "-o", help="Output CSV file"),
+    topk: int = typer.Option(3, "--topk", "-k", help="Number of top predictions"),
+    white_balance: bool = typer.Option(False, "--wb", help="Apply white balance correction"),
     weights: Optional[Path] = typer.Option(None, "--weights", "-w", help="Path to model weights"),
-    white_balance: bool = typer.Option(False, "--wb", help="Apply white balance correction")
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+    csv_out: bool = typer.Option(False, "--csv", help="Output as CSV"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (only with --json)")
 ):
-    """Batch inference on folder of images."""
+    """Batch inference on multiple images."""
     try:
-        if not folder.exists():
-            console.print(f"[red]Error: Folder {folder} does not exist[/red]")
+        # Validate mutual exclusivity
+        if json_out and csv_out:
+            raise typer.BadParameter("Use either --json or --csv, not both.")
+        
+        if not folder.exists() or not folder.is_dir():
+            console.print(f"[red]Error: Folder {folder} does not exist or is not a directory[/red]")
             raise typer.Exit(1)
         
-        # Get image files
-        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
-        image_files = [
-            f for f in folder.iterdir() 
-            if f.suffix.lower() in image_extensions
-        ]
+        # Find image files
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
+        image_files = [f for f in folder.iterdir() if f.suffix.lower() in image_extensions]
         
         if not image_files:
             console.print(f"[red]Error: No image files found in {folder}[/red]")
@@ -104,53 +154,89 @@ def batch(
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
-            console=console
+            console=console,
+            disable=json_out or csv_out  # Disable progress for structured output
         ) as progress:
             task = progress.add_task("Loading model...", total=None)
             
             if weights and weights.exists():
+                # Load custom weights
                 model = FabricClassifier.from_pretrained()
                 model.model.load_state_dict(torch.load(weights, map_location="cpu"))
             else:
                 model = FabricClassifier.from_pretrained()
             
-            # Process images
-            results = []
-            progress.update(task, description="Processing images...", total=len(image_files))
+            progress.update(task, description="Running batch inference...")
             
-            for img_file in image_files:
-                try:
-                    result = model.predict(img_file, white_balance=white_balance)
-                    top_label = max(result, key=result.get)
-                    top_prob = result[top_label]
-                    
-                    results.append({
-                        'filename': img_file.name,
-                        'predicted_label': top_label,
-                        'confidence': top_prob,
-                        'all_probs': result
-                    })
-                except Exception as e:
-                    console.print(f"[yellow]Warning: Failed to process {img_file}: {e}[/yellow]")
+            # Get structured results
+            if json_out or csv_out:
+                records = []
+                for img_file in image_files:
+                    try:
+                        prob_dict = model.predict_proba(img_file, white_balance=white_balance)
+                        record = build_record(str(img_file), prob_dict, k=topk)
+                        records.append(record)
+                    except Exception as e:
+                        # Handle unreadable images
+                        error_record = build_record(str(img_file), {}, k=topk)
+                        error_record["error"] = str(e)
+                        records.append(error_record)
+            else:
+                # Use existing predict_batch method for human-readable output
+                results = model.predict_batch(image_files, topk=topk, white_balance=white_balance)
+        
+        # Handle structured output
+        if json_out:
+            if output:
+                output_format = get_output_format(output)
+                with open(output, 'w') as f:
+                    if output_format == "json":
+                        write_json_array(f, records, pretty=pretty)
+                    else:  # jsonl
+                        write_jsonl(f, records)
+            else:
+                # Default to JSONL on stdout
+                write_jsonl(sys.stdout, records)
+        
+        elif csv_out:
+            if output:
+                with open(output, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(CSV_HEADER)
+                    for record in records:
+                        write_csv_row(writer, record)
+            else:
+                writer = csv.writer(sys.stdout)
+                writer.writerow(CSV_HEADER)
+                for record in records:
+                    write_csv_row(writer, record)
+        
+        else:
+            # Default human-readable output
+            console.print(f"[green]Processed {len(results)} images[/green]")
+            
+            # Save to file if requested (legacy behavior)
+            if output:
+                save_json(results, output)
+                console.print(f"[green]Results saved to {output}[/green]")
+            else:
+                # Display first few results
+                table = Table(title="Batch Results (first 5)")
+                table.add_column("Image", style="cyan")
+                table.add_column("Top Prediction", style="magenta")
+                table.add_column("Confidence", style="green")
                 
-                progress.advance(task)
-        
-        # Save results
-        import csv
-        output.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(output, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['filename', 'predicted_label', 'confidence'])
-            writer.writeheader()
-            for result in results:
-                writer.writerow({
-                    'filename': result['filename'],
-                    'predicted_label': result['predicted_label'],
-                    'confidence': result['confidence']
-                })
-        
-        console.print(f"[green]Batch inference complete. Results saved to {output}[/green]")
-        console.print(f"Processed {len(results)} images")
+                for i, result in enumerate(results[:5]):
+                    if result:
+                        top_label = list(result.keys())[0]
+                        top_prob = result[top_label]
+                        table.add_row(
+                            image_files[i].name,
+                            top_label,
+                            f"{top_prob:.3f}"
+                        )
+                
+                console.print(table)
         
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")

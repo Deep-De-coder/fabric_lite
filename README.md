@@ -43,11 +43,20 @@ result = classifier.predict("image.jpg", white_balance=True)
 ### CLI Usage
 
 ```bash
-# Single image inference
+# Single image inference (human-readable output)
 fabriclite infer image.jpg
 
-# Batch processing
-fabriclite batch /path/to/images --output results.csv
+# Single image inference with structured output
+fabriclite infer image.jpg --json --pretty
+fabriclite infer image.jpg --csv > result.csv
+
+# Batch processing (human-readable output)
+fabriclite batch /path/to/images
+
+# Batch processing with structured output
+fabriclite batch /path/to/images --json --output results.jsonl
+fabriclite batch /path/to/images --json --output results.json --pretty
+fabriclite batch /path/to/images --csv --output results.csv
 
 # Train a model
 fabriclite train /path/to/train /path/to/val --epochs 15
@@ -60,6 +69,45 @@ fabriclite calibrate /path/to/val weights.pt --output temp.json
 
 # Export model
 fabriclite export weights.pt --format onnx --output model.onnx
+```
+
+#### Structured Output Formats
+
+The CLI supports structured outputs with `--json` and `--csv` flags:
+
+**JSON Output:**
+- Single object for `infer` command
+- JSONL (one object per line) for `batch` command by default
+- JSON array when output file has `.json` extension
+- Use `--pretty` for formatted JSON
+
+**CSV Output:**
+- Fixed schema: `image,predicted_label,confidence,cotton,denim,leather,linen,silk,synthetic,velvet,wool`
+- Stable column ordering across all outputs
+- Compatible with data analysis tools
+
+**Example JSON Structure:**
+```json
+{
+  "image": "path/to/image.jpg",
+  "predicted_label": "denim",
+  "confidence": 0.45,
+  "topk": [
+    {"label": "denim", "prob": 0.45},
+    {"label": "cotton", "prob": 0.32},
+    {"label": "silk", "prob": 0.23}
+  ],
+  "probs": {
+    "cotton": 0.32,
+    "denim": 0.45,
+    "leather": 0.01,
+    "linen": 0.00,
+    "silk": 0.23,
+    "synthetic": 0.00,
+    "velvet": 0.00,
+    "wool": 0.00
+  }
+}
 ```
 
 ### FastAPI Server

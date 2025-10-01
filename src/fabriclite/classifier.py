@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from .calibration import TemperatureScaling
+from .constants import CLASS_NAMES
 from .models import create_model
 from .preprocess import preprocess, preprocess_batch
 from .taxonomy import FABRIC_LABELS, IDX_TO_LABEL
@@ -156,16 +157,16 @@ class FabricClassifier:
         self,
         x: Union[str, Path, bytes, torch.Tensor],
         white_balance: bool = False
-    ) -> torch.Tensor:
+    ) -> Dict[str, float]:
         """
-        Get raw probability distribution.
+        Get probability distribution as a dictionary.
         
         Args:
             x: Input image
             white_balance: Whether to apply white balance correction
         
         Returns:
-            Probability tensor [num_classes]
+            Dictionary mapping class names to probabilities
         """
         # Preprocess input
         input_tensor = preprocess(x, white_balance=white_balance)
@@ -179,7 +180,15 @@ class FabricClassifier:
             scaled_logits = self.temperature_scaling.apply_temperature(logits)
             probs = F.softmax(scaled_logits, dim=1)
         
-        return probs[0]  # Remove batch dimension
+        # Convert to dictionary using canonical class names
+        prob_dict = {}
+        for i, class_name in enumerate(CLASS_NAMES):
+            if i < probs.shape[1]:
+                prob_dict[class_name] = float(probs[0, i].item())
+            else:
+                prob_dict[class_name] = 0.0
+        
+        return prob_dict
     
     def calibrate(
         self,
