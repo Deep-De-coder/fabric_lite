@@ -1,6 +1,6 @@
 # FabricLite
 
-A tiny fabric/material classifier for garments with calibrated mixture outputs and mobile-friendly exports.
+A tiny fabric/material classifier for garments with calibrated mixture outputs and mobile-friendly exports. Features structured CLI outputs (JSON/CSV) for seamless integration with data analysis workflows.
 
 ## Features
 
@@ -8,7 +8,8 @@ A tiny fabric/material classifier for garments with calibrated mixture outputs a
 - **MobileNetV3-Small Backbone**: Efficient and accurate classification
 - **Calibrated Outputs**: Temperature scaling and conformal prediction
 - **Multiple Export Formats**: ONNX, TorchScript (TFLite stub)
-- **CLI Interface**: Complete command-line tooling
+- **CLI Interface**: Complete command-line tooling with structured outputs
+- **Structured Outputs**: JSON/CSV formats with stable schemas for data analysis
 - **FastAPI Server**: Production-ready microservice
 - **White Balance Correction**: Optional gray-world preprocessing
 
@@ -42,6 +43,8 @@ result = classifier.predict("image.jpg", white_balance=True)
 
 ### CLI Usage
 
+The CLI supports both human-readable and structured outputs for maximum flexibility:
+
 ```bash
 # Single image inference (human-readable output)
 fabriclite infer image.jpg
@@ -73,7 +76,7 @@ fabriclite export weights.pt --format onnx --output model.onnx
 
 #### Structured Output Formats
 
-The CLI supports structured outputs with `--json` and `--csv` flags:
+**NEW in v0.2.0**: The CLI now supports structured outputs with `--json` and `--csv` flags for seamless integration with data analysis tools:
 
 **JSON Output:**
 - Single object for `infer` command
@@ -317,6 +320,14 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 ```
 
 ## Changelog
+
+### v0.2.0
+- **NEW**: Structured CLI outputs (JSON/CSV)
+- **NEW**: `--json`, `--csv`, and `--pretty` flags for infer and batch commands
+- **NEW**: Stable key ordering and consistent schemas
+- **NEW**: JSONL and JSON array output formats for batch processing
+- **NEW**: Comprehensive test coverage for structured outputs
+- **IMPROVED**: Enhanced CLI flexibility for data analysis workflows
 
 ### v0.1.0
 - Initial release
